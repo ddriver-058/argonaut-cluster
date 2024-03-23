@@ -1,0 +1,70 @@
+# api/templating/argonaut_cluster.yaml
+# See the comprehensive example for more information.
+user_variables: 
+  myvar: value # Supply values that will be templated into the startup scripts
+cluster:
+  vagrant_dir: ~/vagrant # Where the Vagrantfile and associated files will go on the Vagrant servers
+  startup_script: |
+    # #!/bin/bash
+
+    echo "This runs when the Argonaut Cluster API container starts (as non-root)"   
+  inventory_vars:
+    ansible_user: yourusername
+    ansible_python_interpreter: /usr/bin/python3
+  nodes:
+    vagrant-server-0: # must be the actual hostname of your Vagrant server, and be unique
+      inventory_groups:
+        - servers # What ansible inventory group(s) the node belongs to 
+        - workers
+      inventory_vars:
+        ansible_host: 192.168.1.10 # Variables available in the playbooks via the Ansible inventory
+      vms:
+        my-server-0: # Provide the desired Vagrant servername. These must be unique across the cluster.
+          type: server # Applies the configuration from vm_types (shown below)
+          config:
+            memory: '2048' # If you want to override values from the 'server' vm_type, supply them under config:
+        my-worker-0:
+          type: worker
+    vagrant-server-1:
+      inventory_vars:
+        ansible_host: 192.168.1.11
+      inventory_groups:
+        - workers
+      vms:
+        my-worker-1:
+          type: worker
+        my-worker-2:
+          type: worker
+vm_types:
+  server:
+    box:
+      name: ubuntu/bionic64 # Vagrant box name
+      version: 20230607.0.0 # Box version
+    memory: '1024' # in MB
+    cpus: 1 
+    networks:
+      - mode: public_network # specify private_network or public_network
+        bridge: enp2s0 # The device used to access the LAN / internet from the Vagrant server
+        router_ip: 192.168.1.1 # Sets the default route, sometimes necessary to access the internet
+    provisioning:
+      shell_scripts:
+        - >
+          #!/bin/bash
+
+          echo "These run as the VM is provisioning. They have access to sudo"   
+          echo "Access user_variables via {{ user_variables.controller_hostname }}"
+        - >
+          #!/bin/bash
+
+          echo "Provide a 2nd script like so"                
+  worker:
+    box:
+      name: ubuntu/bionic64
+      version: 20230607.0.0
+    memory: '1024'
+    cpus: 1
+    networks:
+      - mode: public_network
+        bridge: enp2s0
+    provisioning:
+      shell_scripts: []                 

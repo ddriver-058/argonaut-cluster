@@ -1,0 +1,144 @@
+# api/templating/argonaut_cluster.yaml
+user_variables:
+  host_network_interface: enp2s0
+  vm_network_interface: enp0s8
+  server_hub_address: server-hub-0
+  controller_hostname: myserver0
+cluster:
+  vagrant_dir: ~/vagrant
+  startup_script: ""
+    # #!/bin/bash
+
+    # apt-get install -y tftpd-hpa
+    # mkdir ~/tftp
+    # chmod o+w ~/tftp
+    # rm ~/tftp/*
+
+    # # Configure TFTP server
+    # echo "TFTP_USERNAME=\"root\"" > /etc/default/tftpd-hpa
+    # echo "TFTP_DIRECTORY=\"/root/tftp\"" >> /etc/default/tftpd-hpa
+    # echo "TFTP_ADDRESS=\"0.0.0.0:69\"" >> /etc/default/tftpd-hpa
+    # echo "TFTP_OPTIONS=\"--secure --create\"" >> /etc/default/tftpd-hpa
+
+    # # Start TFTP server
+    # service tftpd-hpa start    
+  inventory_vars:
+    ansible_user: username
+    ansible_python_interpreter: /usr/bin/python3
+  nodes:
+    myserver1:
+      inventory_groups:
+        - server-hub
+      inventory_vars:
+        ansible_host: 192.168.1.1
+      vms:
+        server-hub-0:
+          type: server_hub
+          config:
+            memory: '2048'
+        worker-0:
+          type: worker
+    myserver2:
+      inventory_vars:
+        ansible_host: 192.168.1.2
+      inventory_groups:
+        - server-spoke
+      vms:
+        server-spoke-0:
+          type: server_spoke
+        worker-1:
+          type: worker
+    # myserver3:
+    #   inventory_vars:
+    #     ansible_host: 192.168.1.3
+    #   inventory_groups:
+    #     - server-spoke
+    #   vms:
+    #     server-spoke-1:
+    #       type: server_spoke
+    #     worker-2:
+    #       type: worker
+vm_types:
+  server_hub:
+    box:
+      name: ubuntu/bionic64
+      version: 20230607.0.0
+    memory: '1024'
+    cpus: 1
+    networks:
+      - mode: public_network
+        bridge: enp2s0
+        router_ip: 192.168.1.100
+    provisioning:
+      shell_scripts:
+        - >
+          #!/bin/bash
+
+          # Get TFTP client
+          apt-get update
+          apt-get install -y tftp-hpa
+
+
+          # Install k3s
+          curl -sfL https://get.k3s.io | sh -s - server --cluster-init
+          sudo chown vagrant /etc/rancher/k3s/k3s.yaml
+
+          # Copy node token to shared dir
+          tftp {{ user_variables.controller_hostname }} -c put /var/lib/rancher/k3s/server/node-token k3s-server-node-token
+
+          # Copy the kubeconfig to the shared dir
+          tftp {{ user_variables.controller_hostname }} -c put /etc/rancher/k3s/k3s.yaml k3s-kubeconfig
+
+          # Additional provisioning steps go here                  
+  server_spoke:
+    box:
+      name: ubuntu/bionic64
+      version: 20230607.0.0
+    memory: '1024'
+    cpus: 1
+    networks:
+      - mode: public_network
+        bridge: enp2s0
+        router_ip: 192.168.1.100
+    provisioning:
+      shell_scripts:
+        - >
+          #!/bin/bash
+
+          # Get TFTP client
+          apt-get update
+          apt-get install -y tftp-hpa
+
+          # Install k3s
+          while ! [ -s k3s-server-node-token ]; do sudo tftp {{ user_variables.controller_hostname }} -c get k3s-server-node-token; sleep 1; done
+          token=$(cat k3s-server-node-token)
+
+          curl -sfL https://get.k3s.io | K3S_TOKEN=$token sh -s - server --server https://{{ user_variables.server_hub_address }}:6443
+
+          # Additional provisioning steps go here                  
+  worker:
+    box:
+      name: ubuntu/bionic64
+      version: 20230607.0.0
+    memory: '4096'
+    cpus: 4
+    networks:
+      - mode: public_network
+        bridge: enp2s0
+        router_ip: 192.168.1.100
+    provisioning:
+      shell_scripts:
+        - >
+          #!/bin/bash
+
+          # Get TFTP client
+          apt-get update
+          apt-get install -y tftp-hpa
+
+          # Update package list and install k3s in agent mode
+          while ! [ -s k3s-server-node-token ]; do sudo tftp {{ user_variables.controller_hostname }} -c get k3s-server-node-token; sleep 1; done
+          token=$(cat k3s-server-node-token)
+
+          curl -sfL https://get.k3s.io | K3S_TOKEN=$token sh -s - agent --server https://{{ user_variables.server_hub_address }}:6443
+
+          # Additional provisioning steps go here                  

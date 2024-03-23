@@ -1,0 +1,29 @@
+version: '3'
+
+services:
+  nginx:
+    build:
+      context: nginx
+    ports:
+      - "780:80"
+      - "7443:443" # Access the app at https://[your-argonaut-cluster-host]:7443
+  api:
+    build:
+      context: api
+    volumes:
+      # - ./api:/api
+      - $HOME/.ssh/known_hosts:/home/node/.ssh/known_hosts # Replace src path with your known_hosts location if non-default
+      - $SSH_AUTH_SOCK:/ssh-agent # Used for SSH agent forwarding
+    environment:
+      - AC_USERNAME=admin # the username to log into the UI
+      - AC_PASSWORD=changeit # the password to log into the UI
+      - ANSIBLE_BECOME_PASS=mybecomepass # the password needed to perform sudo on Vagrant hosts. Use only if needed for a custom playbook.
+      - SSH_AUTH_SOCK=/ssh-agent # Used for SSH agent forwarding
+      - ANSIBLE_STDOUT_CALLBACK=yaml # Causes Ansible to display YAML output, do not change
+    # command: /bin/sh -c "while sleep 1000; do :; done" # override to disable API server (e.g., for development)
+  app:
+    build:
+      context: app
+    # volumes:
+    #   - ./app/argonaut-cluster:/app/argonaut-cluster
+    # command: /bin/sh -c "while sleep 1000; do :; done" # override to disable app (e.g., for development)

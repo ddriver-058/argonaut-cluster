@@ -1,0 +1,18 @@
+- name: Get vm status of all running VMs
+  hosts: "all"
+  become: false
+  gather_facts: false
+
+  tasks:
+    # Check if vagrant dir exists
+    - include_tasks: ../common/check-vagrant-dir.yaml
+    - name: Vagrant status
+      ansible.builtin.command:
+        cmd: "vagrant status --machine-readable"
+        chdir: "{{ vars[inventory_hostname].vagrantDir }}"
+      register: out
+      changed_when: out.rc == 0
+    
+    - name: Show output
+      debug:
+        var: out

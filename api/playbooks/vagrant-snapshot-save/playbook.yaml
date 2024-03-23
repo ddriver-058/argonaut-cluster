@@ -1,0 +1,19 @@
+- name: Save snapshot on target VMs
+  hosts: "{{ vars.hosts }}"
+  become: false
+
+  tasks:
+    # Check if vagrant dir exists
+    - include_tasks: ../common/check-vagrant-dir.yaml
+    - name: Set vm_hostnames var for checking
+      set_fact:
+        vm_hostnames: "{{ vars.hostToVms[inventory_hostname] }}"
+    - include_tasks: ../common/check-vm-hostnames.yaml
+    - name: Vagrant snapshot save
+      delegate_to: localhost
+      args:
+        executable: /bin/bash
+      ansible.builtin.shell: "ssh {{ ansible_user }}@{{ inventory_hostname }} 'cd {{ vars[inventory_hostname].vagrantDir }}; vagrant snapshot save --force {{ item }} {{ vars.snapshotName | quote }}' >> /api/logs/{{ inventory_hostname }}-vagrant-snapshot-save-stdout"
+      loop: "{{ vars.hostToVms[inventory_hostname] }}"
+      register: out
+      changed_when: out.rc == 0

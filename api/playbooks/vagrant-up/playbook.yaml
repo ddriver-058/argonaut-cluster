@@ -1,0 +1,28 @@
+- name: Populate a vagrant directory, a vagrantfile, and then do vagrant up
+  hosts: "{{ vars.hosts }}"
+  become: false
+
+  tasks:
+    # Due to the possibility of an injection attack, we won't create the directory, and 
+    # instead check that it exists.
+    - include_tasks: ../common/check-vagrant-dir.yaml
+    - name: Set vm_hostnames var for checking
+      set_fact:
+        vm_hostnames: "{{ vars.hostToVms[inventory_hostname] }}"
+    - include_tasks: ../common/check-vm-hostnames.yaml
+    - name: Check that command line args are valid
+      assert:
+        that: 
+        - "'{{ vars.provisionArg }}' is regex('^\\-\\-provision$|^\\-\\-no\\-provision$')"
+    - name: Create a vagrant file
+      copy:
+        dest: "{{ vars[inventory_hostname].vagrantDir }}/Vagrantfile"
+        content: "{{ vars[inventory_hostname].vagrantfile }}"
+    - name: Vagrant up
+      delegate_to: localhost
+      ansible.builtin.shell: "ssh {{ ansible_user }}@{{ inventory_hostname }} 'cd {{ vars[inventory_hostname].vagrantDir }}; vagrant up {{ vars.provisionArg }} {{ vars.hostToVms[inventory_hostname] | join(\" \") }}' >> /api/logs/{{ inventory_hostname }}-vagrant-up-stdout"
+      args:
+        executable: /bin/bash
+      register: out
+      changed_when: out.rc == 0
+

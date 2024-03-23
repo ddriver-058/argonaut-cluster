@@ -1,0 +1,11 @@
+---
+- name: Test ansible via echo on localhost
+  hosts: localhost
+  become: false
+
+  tasks:
+    - name: Test echo
+      ansible.builtin.command:
+        cmd: "echo Hello World!"
+      register: out
+      changed_when: out.rc == 0

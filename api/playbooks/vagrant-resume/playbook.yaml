@@ -1,0 +1,22 @@
+- name: Resume target VMs from suspended state
+  hosts: "{{ vars.hosts }}"
+  become: false
+
+  tasks:
+    # Check if vagrant dir exists
+    - include_tasks: ../common/check-vagrant-dir.yaml
+    - name: Set vm_hostnames var for checking
+      set_fact:
+        vm_hostnames: "{{ vars.hostToVms[inventory_hostname] }}"
+    - include_tasks: ../common/check-vm-hostnames.yaml
+    - name: Check that command line args are valid
+      assert:
+        that: 
+        - "'{{ vars.provisionArg }}' is regex('^\\-\\-provision$|^\\-\\-no\\-provision$')"
+    - name: Vagrant resume
+      delegate_to: localhost
+      args:
+        executable: /bin/bash
+      ansible.builtin.shell: "ssh {{ ansible_user }}@{{ inventory_hostname }} 'cd {{ vars[inventory_hostname].vagrantDir }}; vagrant resume {{ vars.provisionArg }} {{ vars.hostToVms[inventory_hostname] | join(\" \") }}' >> /api/logs/{{ inventory_hostname }}-vagrant-resume-stdout"
+      register: out
+      changed_when: out.rc == 0

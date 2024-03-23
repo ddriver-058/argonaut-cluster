@@ -1,0 +1,9 @@
+- name: Check node health via ping
+  hosts: all
+  gather_facts: false
+
+  tasks:
+    - name: ping nodes from ansible controller
+      local_action: ansible.builtin.command ping -c 4 {{ inventory_hostname }}
+      register: out
+      changed_when: out.rc == 0

@@ -1,0 +1,10 @@
+    # Check if vagrant dir exists
+    - name: Verify that vagrant dir exists
+      stat:
+        path: "{{ vars[inventory_hostname].vagrantDir }}"
+      register: path_check
+    - name: Assert the existence of the directory
+      ansible.builtin.assert:
+        that:
+        - path_check.stat.exists
+        fail_msg: "The vagrant dir specified does not exist"

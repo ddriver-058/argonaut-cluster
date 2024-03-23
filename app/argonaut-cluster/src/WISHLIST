@@ -1,0 +1,79 @@
+
+TypeScript
+  Rename existing scripts to indicate no use of typescript (can leave config the same to ensure forwards-compatibility)
+  Complete!
+Playbook security
+  Use ansible | quote() filter whenever possible, validate unquoted inputs.
+  Instead of quoting, validate variables via the assert task type. 
+  For directories, you can use stat.path task in ansible + assert to ensure the path exists.
+  You can use this regexp to test for a valid hostname:
+    ^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])$
+  Then, arguments can be tested like so:
+    ^--provision|--no-provision$
+  Should be complete!
+Ensure proper quoting
+  Ensure commands are quoted such that directory paths with spaces won't create issues.
+  Should be complete!
+
+Set up .env for Ansible become pass
+  Completed!
+
+Filter out default playbooks from listPlaybooks
+  Complete!
+
+Ensure the containers can be run as non root, shift ownership of files to root
+
+Login screen
+  Complete!
+
+Persist Authentication Store
+  Complete!
+
+Design logo
+  Used GIMP
+  Complete!
+
+Design CSS
+  Navy Blue: #000066
+  Gold Back: #ffecb2
+  Gold Front: #ffe493
+  Gold offwhite: #fff9e6
+
+Rename from "Vagant Cluster" to something else
+  "Argonaut Cluster" is clear, shows relationship to "Vagrant", and does not create confusion with other open-source projects. However,
+  will need to put a disclaimer in the readme about no affiliation with Argonaut JSON parser.
+
+Remove warnings, optimize performance
+  Complete (as far as I'm willing to take it for now)
+
+Use types (String, etc.) instead of default vals in prop definitions
+  Complete as I'm actually not using props!
+
+Documentation
+  Examples argonaut_cluster.yaml
+  Full example, with a breakdown of how each key / element is templated
+  Disclaimer about no affiliation with Vagrant / Argonaut. Done!
+  Gaining passwordless SSH. Done!
+  dockerfile configuration, including mounting SSH sock
+  installing Vagrant
+
+Use temporary files for ssh process output
+  Complete! Using a /logs directory to enable review reduce mess
+
+Post images to docker hub
+
+If authentication is expired, implement better checking to route users to login screen
+  Complete!
+
+Record a demo video
+
+Version tagging
+  Ansible: [core 2.14.3]
+  Vagrant: Vagrant 2.4.0
+  Quasar CLI: 2.3.0
+
+BUGS
+Commented sections disappear after saving the argonaut-cluster.yaml.
+  Completed!
+
+

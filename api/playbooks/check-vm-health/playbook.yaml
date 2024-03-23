@@ -1,0 +1,12 @@
+- name: Test VM health by pinging self on VMs
+  hosts: "{{ vars.hosts }}"
+  gather_facts: false
+
+  tasks:
+    - name: ping localhost in the target vm
+      ansible.builtin.command:
+        cmd: "vagrant ssh {{ item }} -c 'ping -c 4 localhost'"
+        chdir: "{{ vars.vagrantDir }}"
+      register: out
+      changed_when: out.rc == 0
+      loop: "{{ vars.vms[inventory_hostname] }}"

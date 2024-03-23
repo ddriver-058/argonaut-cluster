@@ -1,0 +1,11 @@
+- name: Validate vagrant cluster configuration
+  hosts: all
+  become: false
+
+  tasks:
+    - name: Vagrant validate
+      ansible.builtin.command:
+        cmd: "vagrant validate"
+        chdir: "{{ vars[inventory_hostname].vagrantDir }}"
+      register: out
+      changed_when: out.rc == 0

@@ -1,0 +1,161 @@
+# api/templating/argonaut_cluster.yaml
+# Define user variables here.
+# These are passed into the handlebars template input when creating the
+# the Vagrantfiles. They are useful in the provisioning scripts, where you
+# can pass them as {{ user_variables.my_var }}
+user_variables:
+  my_var: my_val
+
+# The cluster object controls how the Vagrantfiles and Ansible inventories are templated.
+cluster:
+  # The directory on the Vagrant hosts where the Vagrantfile and associated files are kept.
+  vagrant_dir: ~/vagrant
+
+  # A script that runs on the API server on startup (as non-root)
+  startup_script: | 
+    # #!/bin/bash
+    # echo "Your script here"
+
+  # Control Ansible inventory variables.
+  # Here at the cluster level, they apply to all Vagrant hosts.
+  inventory_vars: 
+    ansible_user: username # REQUIRED! What user to SSH as to run playbooks and SSH commands.
+    ansible_python_interpreter: /usr/bin/python3 # The python binary in the container
+
+  # Specify the Vagrant hosts and the VMs that run on them.
+  nodes:
+    # Each key must be the actual hostname of the Vagrant host.
+    # They must be unique across the cluster.
+    vagrant-host-0:
+      # Sets what inventory groups the Vagrant host belongs to.
+      # Useful for running custom playbooks on a subset of groups.
+      inventory_groups:
+        - server
+        - worker
+
+      # Set ansible inventory vars to be made available in playbooks.
+      # At the node level, these apply to individual Vagrant hosts.
+      inventory_vars:
+        ansible_host: 192.168.1.1
+
+      # Specify the VMs to run on the Vagrant host.
+      vms:
+        # Each key is the desired VM hostname. These must be unique across the cluster.
+        server-0:
+          # We can pull the VM configuration from the vm_types: (after the cluster block). 
+          # Just provide the name of the vm_type.
+          type: server
+          # If you want to override values from the 'server' vm_type, supply them under config:
+          config:
+            memory: '2048'
+        worker-0:
+          type: worker
+
+    # Supply additional Vagrant hosts as new keys below.
+    vagrant-host-1:
+      inventory_vars:
+        ansible_host: 192.168.1.2
+      inventory_groups:
+        - worker
+      vms:
+        worker-1:
+          type: worker
+        worker-2:
+          type: worker
+
+# Specify the VM types here.
+# These are referenced in the cluster: specificiation above.
+vm_types:
+  # Supply VM types as keys to the vm_types object.
+  server:
+    # Specify the base VM (box) here.
+    # See https://app.vagrantup.com/boxes/search.
+    box:
+      name: ubuntu/bionic64 # The box name.
+      version: "20230607.0.0" # The box version that can be pulled from Vagrant cloud above.
+      # architecture: amd64 # Optionally provde the architecture, otherwise, Vagrant will auto-select one.
+    
+    # Specify system resource limits.
+    memory: 1024 # In MB
+    cpus: 1 # In Cores
+
+    # Specify whether to run in headless mode (gui: false) or not.
+    # gui: false
+
+    # Pass sets of arguments to VBox-Manage. 
+    # Each element is list of arguments. Pass multiple
+    # list elements for multiple arguments.
+    # See https://developer.hashicorp.com/vagrant/docs/providers/virtualbox/configuration
+    # vbox_manage_customize:
+    #   - - "modifyvm"
+    #     - ":id"
+    #     - "--cpuexecutioncap"
+    #     - "50"
+
+    # Optionally specify how to forward ports.
+    # To forward multiple ports, supply additional list elements.
+    # See https://developer.hashicorp.com/vagrant/docs/networking/forwarded_ports
+    forwarded_ports:
+      - host: 8080
+        guest: 80
+        protocol: tcp
+      - host: 4443
+        guest: 443
+        protocol: tcp
+    
+    # Specify the network configuration(s). Supply a list of objects.
+    # See https://developer.hashicorp.com/vagrant/docs/providers/virtualbox/networking
+    networks: []
+      # Here is an example of a private network.
+      # This will be configured as a host-only network.
+      # - mode: "private_network"
+        # ip: 192.168.1.3 # Used when type: ip is specified, unneeded otherwise.
+        # type: dhcp    # one of ip, dhcp must be supplied
+        # auto_config: true # Whether to have Vagrant auto-config the network. defaults to true.
+
+      # Example public network.
+      # This will be configured as a bridged network.
+      # - mode: "public_network"
+        # ip: 192.168.1.3 # Optional. Can get ip from DHCP instead.
+        # Specify one or more bridges. These are the adapters the VM will interface with on the network.
+        # bridge: 
+        #   - "en1: Wi-Fi (AirPort)"
+        #   - "en6: Broadcom NetXtreme Gigabit Ethernet Controller"
+        # auto_config: true # Whether to have Vagrant auto-config the network. defaults to true.
+        # router_ip: 192.168.1.100 # Sets the default route to this address. Can be set to the router IP on home networks.
+        # use_dhcp_assigned_default_route: false # Whether to get the default route from DHCP. Unneded of router_ip is set.
+
+    # Set SSH configuration. Provide an object.
+    # By default, Vagrant >= 1.7 uses randomly-generated private key to authenticate SSH,
+    # which provides acceptable security.
+    # I recommend leaving this default, but you can change it if needed.
+    # See https://developer.hashicorp.com/vagrant/docs/vagrantfile/ssh_settings
+    ssh: {}
+      # username: vagrant # Username to be used for SSH.
+      # password: mypass # Password to be used (recommended to use private_key_path for key-based auth instead).
+      # private_key_path: ~/.ssh/mykey.key # Path to a private key within the VM. Only used if you replace the key yourself.
+      # verify_host_key: false # Whether to perform strict host key validation. Defaults to false.
+      # insert_key: true # Whether to insert a secure private key to replace the insecure one. Defaults to true.
+    
+    # Specify folders from the Vagrant host to mount into the VM.
+    # See https://developer.hashicorp.com/vagrant/docs/synced-folders/basic_usage
+    synced_folders:
+    - host: ~/vagrant # The Vagrant host path
+      guest: ~/vagrant # The VM path
+      # create: false # Whether to create the path on the host if not already existent
+      # owner: root # Sets the owner of the folder in the VM
+      # group: grp # Sets the group who controls the folder in the VM
+      # mount_id: vagrant_folder # ID to assign to the mount (shows up via 'mount' command)
+      # mount_options: [] # Additional options to pass to 'mount'
+
+    # Set provisioning steps (i.e., after initializing the VM)
+    # Currently, only shell scripts are tested.
+    # See https://developer.hashicorp.com/vagrant/docs/provisioning/shell
+    provisioning:
+      shell_scripts:
+        - |
+          echo Hello World!
+  # Now we can define additional VM types as keys to this object.
+  worker:
+    # See server: definition
+    

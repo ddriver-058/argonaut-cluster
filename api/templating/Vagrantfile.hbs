@@ -1,0 +1,73 @@
+
+Vagrant.configure("2") do |config|
+  {{#each vms}}
+    config.vm.define "{{ @key }}" do |nodeconfig|
+
+      # Configure box #
+      nodeconfig.vm.box = "{{ this.config.box.name }}"
+      {{#if this.config.box.version}}nodeconfig.vm.box_version = "{{ this.config.box.version }}"{{/if}}
+      {{#if this.config.box.architecture }}nodeconfig.vm.box_architecture = "{{ this.config.box.architecture }}"{{/if}}
+
+      # Configure provider options #
+      config.vm.provider "virtualbox" do |v|
+        {{#if this.config.memory}}v.memory = "{{this.config.memory}}"{{/if}}
+        {{#if this.config.cpus}}v.cpus = "{{this.config.cpus}}"{{/if}}
+        {{#if this.config.gui}}v.gui = "{{this.config.gui}}"{{/if}}
+        {{#each this.config.vbox_manage_customize}}
+          v.customize [{{#each this}}"{{this}}"{{#unless @last}},{{/unless}}{{/each}}]
+        {{/each}}
+      end
+
+      # Configure network #
+      {{#each this.config.networks}}
+      nodeconfig.vm.network "{{ this.mode }}"{{#each this}}{{#unless (eq @key "mode")}}{{#unless (eq @key "router_ip")}}, {{@key}}: "{{this}}"{{/unless}}{{/unless}}{{/each}}
+      # Configure router ip, if needed
+      {{#if this.router_ip}}
+      config.vm.provision "shell", run: "always", inline: "route add default gw {{this.router_ip}} || true"
+      {{/if}}
+      {{/each}}
+
+      # Configure forwarded ports #
+      {{#each this.config.forwarded_ports}}
+      config.vm.network "forwarded_port", 
+        {{#each this}}
+        {{@key}}: "{{this}}"{{#unless @last}},{{/unless}}
+        {{/each}}
+      {{/each}}
+
+      # Configure synced folders
+      {{#each this.config.synced_folders}}
+      config.vm.synced_folder "this.host", 
+        "this.guest"{{#each this}}{{#unless (eq @key "host")}}{{#unless (eq @key "guest")}}, {{@key}}: "{{this}}"{{/unless}}{{/unless}}{{/each}}
+      {{/each}}
+
+      # Set the hostname for VM #
+      nodeconfig.vm.hostname = "{{ @key }}"
+
+      # Configure SSH #
+      nodeconfig.ssh do |ssh|
+        {{#each this.config.ssh}}
+        ssh.{{ @key }} = "{{ this }}"
+        {{/each}}
+      end
+
+      # Configure provisioning #
+      # Shell scripts
+      {{#each this.config.provisioning.shell_scripts}}
+      nodeconfig.vm.provision "shell", inline: <<-SHELL
+        {{{ this }}}
+      SHELL
+      {{/each}}
+
+      # Ansible playbooks
+      {{#each this.config.provisioning.ansible}}
+      config.vm.provision "ansible" do |ansible|
+        {{#each this}}
+        ssh.{{ @key }} = "{{ this }}"
+        {{/each}}
+      end
+      {{/each}}
+
+    end
+  {{/each}}
+end

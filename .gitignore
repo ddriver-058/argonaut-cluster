@@ -1,0 +1,14 @@
+api/node_modules
+app/vagrant-cluster/node_modules
+node_modules
+api/.vscode/launch.json
+.archive
+.github
+.vscode
+api/.devcontainer
+api/.github
+api/.vscode
+app/.devcontainer
+app/.github
+app/.vscode
+app/argonaut-cluster/.vscode

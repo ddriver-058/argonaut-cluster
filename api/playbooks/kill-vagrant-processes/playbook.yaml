@@ -1,0 +1,11 @@
+- name: Kill vagrant processes
+  hosts: "{{ vars.hosts }}"
+  gather_facts: false
+
+  tasks:
+    - name: Kill vagrant and ruby processes
+      ansible.builtin.shell: "pkill vagrant; pkill ruby"
+      args:
+        executable: /bin/bash
+      register: out
+      changed_when: out.rc == 0

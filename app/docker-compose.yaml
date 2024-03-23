@@ -1,0 +1,11 @@
+version: '3'
+
+services:
+  argonaut-cluster-app:
+    build:
+      context: .
+    ports:
+      - "8080:8080/udp"
+    volumes:
+      - .:/workspace-app
+    command: /bin/sh -c "while sleep 1000; do :; done" # override default api.js command
