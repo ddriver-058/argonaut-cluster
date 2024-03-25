@@ -59,7 +59,7 @@ Vagrant.configure("2") do |config|
       SHELL
       {{/each}}
 
-      # Ansible playbooks
+      # Ansible playbooks (currently unimplemented)
       {{#each this.config.provisioning.ansible}}
       config.vm.provision "ansible" do |ansible|
         {{#each this}}

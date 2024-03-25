@@ -11,11 +11,16 @@ const assert = require('assert');
 const utility = require('./utility');
 const ansible = require('./ansible');
 
-// define helpers
+// define handlebars helpers
 handlebars.registerHelper('eq', function (arg1, arg2, options) {
   return arg1 === arg2;
 })
 
+// Asserts properties of the argonaut cluster config
+// Can set whether to stop in error or return empty on failure
+// Currently checks:
+//   - unique node hostnames
+//   - unique vm hostnames
 function validateArgonautCluster(acObj, stop = true) {
   const nodeHostnames = Object.keys(acObj.cluster.nodes);
   const vmHostnames = _.flatten(_.map(acObj.cluster.nodes, (value) => {
@@ -39,29 +44,33 @@ function validateArgonautCluster(acObj, stop = true) {
 
 };
 
+// Reads AC config from standard location, validates it, and returns the object
 function readArgonautClusterConfig() {
   const yamlData = fs.readFileSync("templating/argonaut_cluster.yaml");
   const out = validateArgonautCluster(yaml.load(yamlData), false);
   return out;
 };
 
+// Templates out Vagrantfiles from the Argonaut Cluster config
+// Returns an object that enables lookup of Vagrantfiles by node hostname
+// The configuration generated from the node types (acState) is also returned
 function getVagrantFiles(acConfig = readArgonautClusterConfig()) {
 
   validateArgonautCluster(acConfig, true);
   const acState = structuredClone(acConfig); // the state actually passed to playbooks
 
   // TODO: Check for existence of cluster.inventory_variables.ansible_user
-  
   let currentVm;
   try {
-    // First, let's rename the vm key in the acConfig to kebab case so vagrant accepts the hostname
-    // TODO: the variable names for the keys and values are bad here.
-    Object.entries(acState.cluster.nodes).map(([nodeConfigKey, nodeConfigValue]) => {
-      Object.entries(nodeConfigValue.vms).map(([vmConfigKey, vmConfigValue]) => {
-        currentVm = vmConfigKey;
-        if (utility.snakeToKebab(vmConfigKey) !== vmConfigKey) {
-          acState.cluster.nodes[nodeConfigKey].vms[utility.snakeToKebab(vmConfigKey)] = vmConfigValue;
-          delete acState.cluster.nodes[nodeConfigKey].vms[vmConfigKey];
+    // Rename vm hostname keys from snake to kebab case
+    // This allows the user's acConfig to work in case they adopt
+    // ansible-style casing for vm hostnames
+    Object.entries(acState.cluster.nodes).map(([nodeKey, nodeValue]) => {
+      Object.entries(nodeValue.vms).map(([vmKey, vmValue]) => {
+        currentVm = vmKey;
+        if (utility.snakeToKebab(vmKey) !== vmKey) {
+          acState.cluster.nodes[nodeKey].vms[utility.snakeToKebab(vmKey)] = vmValue;
+          delete acState.cluster.nodes[nodeKey].vms[vmKey];
         }
       });
     });
@@ -75,18 +84,19 @@ function getVagrantFiles(acConfig = readArgonautClusterConfig()) {
   }
 
   try {
-    // assign acState to the desired config for each vm on the nodes
-    Object.entries(acState.cluster.nodes).map(([nodeConfigKey, nodeConfigValue]) => {
-      Object.entries(nodeConfigValue.vms).map(([vmConfigKey, vmConfigValue]) => {
-        currentVm = vmConfigKey;
-        vmState = structuredClone(vmConfigValue);
+    // Transform the vm configurations into the full specification
+    // passed into the template by applying the vm_type
+    Object.entries(acState.cluster.nodes).map(([nodeKey, nodeValue]) => {
+      Object.entries(nodeValue.vms).map(([vmKey, vmValue]) => {
+        currentVm = vmKey;
+        vmState = structuredClone(vmValue);
 
         // initialize vm config with values from the type
-        vmState.config = acConfig.vm_types[vmConfigValue.type];
+        vmState.config = acConfig.vm_types[vmValue.type];
 
         // override values from the config
-        if(vmConfigValue.config !== undefined) {
-          vmState.config = utility.overrideValues(vmState.config, vmConfigValue.config);
+        if(vmValue.config !== undefined) {
+          vmState.config = utility.overrideValues(vmState.config, vmValue.config);
         }
 
         // render the values in the startup scripts
@@ -97,7 +107,7 @@ function getVagrantFiles(acConfig = readArgonautClusterConfig()) {
 
 
         // update acState with the vmState
-        acState.cluster.nodes[nodeConfigKey].vms[vmConfigKey] = vmState;
+        acState.cluster.nodes[nodeKey].vms[vmKey] = vmState;
       });
     });
 
@@ -113,12 +123,13 @@ function getVagrantFiles(acConfig = readArgonautClusterConfig()) {
   
 
   // render vagrant files and append to the acState
-  // pass in the node value AND user vars to Vagrantfile.hbs
+  // pass in the node value and user vars to Vagrantfile.hbs
+  // (I don't think passing user vars is actually necessary / would do anything, so will need to test)
   let currentNode;
   try {
-    vagrantFileObj = Object.entries(acState.cluster.nodes).reduce((acc, [nodeStateKey, nodeStateValue]) => {
+    vagrantFileObj = Object.entries(acState.cluster.nodes).reduce((acc, [nodeKey, nodeValue]) => {
 
-      templateInput = acState.cluster.nodes[nodeStateKey];
+      templateInput = acState.cluster.nodes[nodeKey];
       templateInput.user_variables = acConfig.user_variables;
   
       vagrantfileTemplatePath = "templating/Vagrantfile.hbs";
@@ -132,12 +143,12 @@ function getVagrantFiles(acConfig = readArgonautClusterConfig()) {
       // Create a temporary file to pass the vagrant file and vagrant dir to host
       //   via a vars.yaml argument to ansible-playbook
       // The playbook will write the vagrant file and execute vagrant up
-      acc[nodeStateKey] = {
+      acc[nodeKey] = {
         vagrantDir: acConfig.cluster.vagrant_dir,
         vagrantfile: vagrantfile
       };
   
-      return acc
+      return acc;
   
     }, {});
   } catch(error) {
@@ -155,17 +166,22 @@ function getVagrantFiles(acConfig = readArgonautClusterConfig()) {
 };
   
 
+// Given an array of VMs, look up the nodes hosting those VMs
+// Returns an object where VMs can be looked up by node hostname
 function getTargetHosts(acState, targetVms) {
 
-  // If vm is defined, then we will only run the playbook on the
-  // host containing the vm
+  // Initialize output object
   let hostToVms = {};
 
+  // If targetVms is supplied, then iterate through
+  // the nodes & vms to add relevant entries
   if(targetVms !== undefined) {
 
     for(node in acState.cluster.nodes) {
-      // ensure at least 1 vm from target is on node
-      hostToVms[node] = [];
+      hostToVms[node] = []; // initialize vms array
+
+      // Check each vm from targetVms to see if it is specified as belonging
+      // to iterated node
       for(vm of targetVms) {
         if(Object.keys(acState.cluster.nodes[node].vms).includes(vm)) {
           hostToVms[node].push(vm);
@@ -173,8 +189,11 @@ function getTargetHosts(acState, targetVms) {
       }
     }
 
+    // Filter to non-empty vm arrays
     hostToVms = _.pickBy(hostToVms, value => value.length > 0);
 
+  // Otherwise, supply an empty string as lookup, as this will
+  // match all vms in Vagrant CLI calls
   } else {
 
     for(node in acState.cluster.nodes) {
@@ -186,9 +205,11 @@ function getTargetHosts(acState, targetVms) {
   return hostToVms;
 };
 
+// Reads the AC config, validating it (returning empty if failure), 
+// and runs the startup script
 const clusterInit = async() => {
   try {
-    const acConfig = readArgonautClusterConfig();
+    const acConfig = readArgonautClusterConfig(); // validates with stop=false
     const startupScriptPath = tmp.fileSync({postfix: '.sh'});
     utility.myWrite(
       acConfig.cluster.startup_script,
@@ -202,11 +223,12 @@ const clusterInit = async() => {
       ]
     );
   } catch(error) {
-    console.log(`Startup script failed with: ${error}`)
+    console.log(`clusterInit failed with: ${error}`)
   }
 
 };
 
+// Given the AC config object, returns the AC graph object passed to the Vue app
 const generateAcGraphConfiguration = async(argonautClusterObj) => {
   nodeHorizontalSpacing = -150;
   nodeVerticalSpacing = -80;
@@ -287,7 +309,8 @@ const generateAcGraphConfiguration = async(argonautClusterObj) => {
   // form edges
   edges = {};
   edgeIndex = 0;
-  // cluster -> nodes
+
+  // Edges from cluster -> nodes
   for(node in nodeLayouts) {
     edges["edge"+edgeIndex] = {
       source: "cluster",
@@ -296,7 +319,7 @@ const generateAcGraphConfiguration = async(argonautClusterObj) => {
     edgeIndex += 1;
   }
 
-  // nodes -> vms
+  // Edges from nodes -> vms
   for(node in nodeLayouts) {
     for(vm in vmLayouts) {
       if(Object.keys(argonautClusterObj.cluster.nodes[node].vms).includes(vm)) {
@@ -317,6 +340,8 @@ const generateAcGraphConfiguration = async(argonautClusterObj) => {
 
 }
 
+// Return state objects for the cluster, node, and VM stores of
+// the Vue app
 initializeAcState = async(argonautClusterObj) => {
 
   clusterTemplate = {
@@ -348,8 +373,12 @@ initializeAcState = async(argonautClusterObj) => {
   // Set child nodes in cluster obj
   clusterTemplate.childNodes = Object.keys(argonautClusterObj.cluster.nodes);
 
+  // Initialize node and VM state objects
   nodes = {};
   vms = {};
+
+  // Iterate through nodes and VMs to set child / parent objects
+  // and keys, which represent the node / vm
   for(node in argonautClusterObj.cluster.nodes) {
     nodeEntry = structuredClone(nodeTemplate);
     nodeEntry.childVms = Object.keys(argonautClusterObj.cluster.nodes[node].vms);
@@ -371,17 +400,21 @@ initializeAcState = async(argonautClusterObj) => {
   };
 };
 
+// Run the VM health check playbook and stream output in realtime
+// to provided wsConn
 const checkVmHealth = (
   wsConn,
   acConfig = readArgonautClusterConfig()
 ) => {
 
+  // initialize variables used by the playbook
   const playbookVars = {
-    hosts: Object.keys(acConfig.cluster.nodes),
+    hosts: Object.keys(acConfig.cluster.nodes), // nodes to iterate over
     vagrantDir: acConfig.cluster.vagrant_dir,
     vms: {}
   };
 
+  // Supply vms, which will be looked up via node hostname
   for(host of playbookVars.hosts) {
     playbookVars.vms[host] = Object.keys(acConfig.cluster.nodes[host].vms);
   };
@@ -396,6 +429,8 @@ const checkVmHealth = (
 
 };
 
+// Run the node healthcheck playbook, streaming to the provided
+// wsConn
 const checkNodeHealth = (wsConn) => {
 
   ansible.runPlaybookWebsocket(
@@ -405,8 +440,14 @@ const checkNodeHealth = (wsConn) => {
 
 };
 
+// Processes log output from playbooks to relevant
+// cluster metadata, switching on processType,
+// which is usually the playbook name
 const processLogOutput = (logs, processType) => {
 
+  // Helper functions
+  // Given 2 arrays, output an object where
+  // arr1 are the keys to the values of arr2
   const arraysToObj = (arr1, arr2) => {
     const out = {};
     for(let i = 0; i < arr1.length; i++) {
@@ -417,11 +458,16 @@ const processLogOutput = (logs, processType) => {
     return out;
   };
 
+  // Return an array of only the unique values
+  // in arr. 
+  // TODO: replace with _.uniq
   const uniqueArray = (arr) => {
     const arrSet = new Set(arr);
     return [...arrSet]
   };
 
+  // Call arr.match using provided regex,
+  // outputing only first match
   const getFirstMatch = (arr, regex) => {
     let out;
     if(arr) {
@@ -433,12 +479,15 @@ const processLogOutput = (logs, processType) => {
     }
   };
 
+  // initialize output and logs object
   let out;
   const logsJn = logs.join('\n');
   
+  // Will match certain regex from the logsJn based
+  // on the processType
   switch (processType) {
     case 'vagrant-status': {
-      const regexp = /[^,]*,state\-human\-short,.*/g;
+      const regexp = /[^,]*,state\-human\-short,.*/g; // pulls frm vagrant status machine-readable output
       const mtchArray = uniqueArray(logsJn.match(regexp));
       const stateRe = /[^,]*$/;
       const stateArray = mtchArray.map((x) => x.match(stateRe)[0]);
@@ -448,7 +497,8 @@ const processLogOutput = (logs, processType) => {
       break;
     }
     case 'vm-health': {
-      const failedRegex = /failed:.*changed=false/g;
+      // Will treat failures and successes separately
+      const failedRegex = /failed:.*changed=false/g; // Pulls from ansible playbook status, looking for failed changes
       const failedLines = logsJn.match(failedRegex);
       const failedKeyRegex = /(?<=item=)[^\)]*/;
       let failedKeys;
@@ -461,7 +511,7 @@ const processLogOutput = (logs, processType) => {
         failedValues = []
       }
       
-      const successRegex = /changed:.*/g;
+      const successRegex = /changed:.*/g; // looks for successful changes in playbook output
       const successLines = logsJn.match(successRegex);
       const successKeyRegex = /(?<=item=)[^\)]*/;
       let successKeys;
@@ -482,10 +532,10 @@ const processLogOutput = (logs, processType) => {
     }
     case 'node-health': {
       console.log(0);
-      const summaryRegex = /.*ok.*changed.*/g;
+      const summaryRegex = /.*ok.*changed.*/g; // isolates to lines relating to playbook status
       const summaryLines = logsJn.match(summaryRegex);
-      const successRegex = /.*changed=1.*/;
-      const failedRegex = /.*changed=0.*/;
+      const successRegex = /.*changed=1.*/; // indicates succesful change, i.e. task run
+      const failedRegex = /.*changed=0.*/; // indicates failed change, i.e. task run
       const successLines = summaryLines.map((x) => getFirstMatch(x, successRegex));
       const failedLines = summaryLines.map((x) => getFirstMatch(x, failedRegex));
 

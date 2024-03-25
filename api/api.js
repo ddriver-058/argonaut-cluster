@@ -30,18 +30,19 @@ const wsConnections = new Map();
 const wsApp = websockify(new Koa());
 wsApp.ws.use(async (ctx, next) => {
   console.log('ws connected');
-  // ctx.websocket is the WebSocket instance
+  
+  // Display received messages (no use for these currently)
   ctx.websocket.on('message', (message) => {
     
     console.log(`Received: ${message}`);
-    // Handle the WebSocket message here
 
   });
 
-  // You can also send messages to the WebSocket
-  // ctx.websocket.send('Hello, WebSocket connected!');
+  // Generate a clientID for looking up cached ws connections
   const clientId = Date.now().toString();
-  wsConnections.set(clientId, ctx.websocket);
+  wsConnections.set(clientId, ctx.websocket); // cache the connection
+
+  // Send a confirmation message, supplying clientId to the recipient
   ctx.websocket.send(
     JSON.stringify(
       {
@@ -454,6 +455,7 @@ const authenticationMiddleware = async (ctx, next) => {
     return;
   }
 
+  // All other http endpoints will have the bearer token checked
   const token = ctx.request.headers.authorization.replace('Bearer ', '');
 
   try {
@@ -472,6 +474,7 @@ const authenticationMiddleware = async (ctx, next) => {
 };
 
 router.get('/check-token', async ctx => {
+  // implicitly calls bearer token check
   ctx.body = 'OK';
 })
 
@@ -479,7 +482,7 @@ router.get('/check-token', async ctx => {
 
 // API SERVER CONFIG
 
-app.use(cors()); // Since we don't know which host will run AC, I disabled CORS.
+app.use(cors()); // Since we don't know which host will run AC, disable CORS
 app.use(authenticationMiddleware);
 app.use(router.routes());
 app.use(router.allowedMethods());

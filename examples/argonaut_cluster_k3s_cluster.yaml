@@ -1,27 +1,21 @@
 # api/templating/argonaut_cluster.yaml
+# Create ~/tftp, allow others to rw, and add this to your AC docker_compose.yaml to enable tftp.
+# Once done provisioning, take down tftp container to prevent remote writing risk
+# tftp:
+#   image: pghalliday/tftp
+#   container_name: tftp
+#   ports:
+#     - "69:69/udp"
+#   volumes:
+#     - "$HOME/tftp:/var/tftpboot" # ensure tftp folder allows others to write
+#   command: ["-L", "--create", "--secure", "/var/tftpboot"] # override CMD to allow file creation
+
 user_variables:
-  host_network_interface: enp2s0
-  vm_network_interface: enp0s8
-  server_hub_address: server-hub-0
-  controller_hostname: myserver0
+  server_hub_address: server-hub-0 # VM hostname of k3s server hub
+  controller_hostname: myserver0 # Should be the AC controller node
 cluster:
   vagrant_dir: ~/vagrant
-  startup_script: ""
-    # #!/bin/bash
-
-    # apt-get install -y tftpd-hpa
-    # mkdir ~/tftp
-    # chmod o+w ~/tftp
-    # rm ~/tftp/*
-
-    # # Configure TFTP server
-    # echo "TFTP_USERNAME=\"root\"" > /etc/default/tftpd-hpa
-    # echo "TFTP_DIRECTORY=\"/root/tftp\"" >> /etc/default/tftpd-hpa
-    # echo "TFTP_ADDRESS=\"0.0.0.0:69\"" >> /etc/default/tftpd-hpa
-    # echo "TFTP_OPTIONS=\"--secure --create\"" >> /etc/default/tftpd-hpa
-
-    # # Start TFTP server
-    # service tftpd-hpa start    
+  startup_script: ""   
   inventory_vars:
     ansible_user: username
     ansible_python_interpreter: /usr/bin/python3

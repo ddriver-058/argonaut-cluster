@@ -11,18 +11,24 @@ const argonautCluster = require('./argonautCluster');
 const utility = require('./utility');
 const ansible = require('./ansible');
 
+// Streams the output of a vagrant process via tailing-stream to wsConn
+// The playbook pipes the output of an ssh command running the playbook
+// to a file that tstream reads from
 const streamVagrantProcessPipe = async(
   wsConn,
   playbookVars,
   playbookName
 ) => {
-  // Since vagrant up is often long-running, we will pipe the stdout
-  // of the process to the same WS connection
+  // Since vagrant processes are often long-running, we will pipe the stdout
+  // of the WS connection
   let stdoutPath;
   let pipeStream;
+
+  // Each node has a separate log file, so iterate through
+  // each of them to stream the output
   for(host of playbookVars.hosts) {
     stdoutPath = `logs/${host}-${playbookName}-stdout`
-    utility.myWrite('', stdoutPath);
+    utility.myWrite('', stdoutPath); // reinitialize log file
     pipeStream = tstream.createReadStream(stdoutPath, {timeout: 0});
 
     pipeStream.on('data', (data) => {
@@ -36,11 +42,13 @@ const streamVagrantProcessPipe = async(
   }
 }
 
+// Call vagrant up and stream the output to the wsConn
+// provision controls whether the provisioning scripts are run
 const vagrantUp = async (wsConn, vms, provision = true) => {
 
   // form vagrantfiles
   playbookVars = argonautCluster.getVagrantFiles();
-  // vm only exists on a subset of the hosts
+  // vms only exist on a subset of the hosts
   hostToVms = argonautCluster.getTargetHosts(playbookVars.acState, vms);
 
   delete playbookVars.acState; // avoid unnecessary writing
@@ -54,14 +62,17 @@ const vagrantUp = async (wsConn, vms, provision = true) => {
     playbookVars.provisionArg = "--no-provision"
   }
 
+  // Playbook reads vars from a temporary file
   varsPath = utility.tmpWrite(yaml.dump(playbookVars));
 
+  // Stream ansible output from process
   ansible.runPlaybookWebsocket(
       wsConn,
       "vagrant-up",
       varsPath
   );
 
+  // stream vagrant output from inner ssh process
   streamVagrantProcessPipe(
     wsConn,
     playbookVars,
@@ -69,7 +80,9 @@ const vagrantUp = async (wsConn, vms, provision = true) => {
   )
 
 };
-  
+
+// calls vagrant destroy on the provided vms, streaming output to wsConn
+// graceful controls whether VMs are shut down gracefully or forcefully
 const vagrantDestroy = async (wsConn, vms, graceful = false) => {
 
   playbookVars = argonautCluster.getVagrantFiles();
@@ -89,12 +102,14 @@ const vagrantDestroy = async (wsConn, vms, graceful = false) => {
 
   varsPath = utility.tmpWrite(yaml.dump(playbookVars));
 
+  // Stream ansible output from process
   ansible.runPlaybookWebsocket(
     wsConn,
     "vagrant-destroy",
     varsPath
   );
 
+  // stream vagrant output from inner ssh process
   streamVagrantProcessPipe(
     wsConn,
     playbookVars,
@@ -103,6 +118,8 @@ const vagrantDestroy = async (wsConn, vms, graceful = false) => {
 
 };
 
+// Runs vagrant halt on the provided vms, streaming output to wsconn
+// force controls whether the VM is forcefully shut down
 const vagrantHalt = async (wsConn, vms, force = false) => {
 
   playbookVars = argonautCluster.getVagrantFiles();
@@ -122,12 +139,14 @@ const vagrantHalt = async (wsConn, vms, force = false) => {
 
   varsPath = utility.tmpWrite(yaml.dump(playbookVars));
 
+  // Stream ansible output from process
   ansible.runPlaybookWebsocket(
     wsConn,
     "vagrant-halt",
     varsPath
   );
 
+  // stream vagrant output from inner ssh process
   streamVagrantProcessPipe(
     wsConn,
     playbookVars,
@@ -136,6 +155,7 @@ const vagrantHalt = async (wsConn, vms, force = false) => {
 
 };
   
+// Calls vagrant suspend on provided vms, streaming output to wsConn
 const vagrantSuspend = async (wsConn, vms) => {
 
   playbookVars = argonautCluster.getVagrantFiles();
@@ -148,12 +168,14 @@ const vagrantSuspend = async (wsConn, vms) => {
 
   varsPath = utility.tmpWrite(yaml.dump(playbookVars));
 
+  // Stream ansible output from process
   ansible.runPlaybookWebsocket(
     wsConn,
     "vagrant-suspend",
     varsPath
   );
 
+  // stream vagrant output from inner ssh process
   streamVagrantProcessPipe(
     wsConn,
     playbookVars,
@@ -161,7 +183,9 @@ const vagrantSuspend = async (wsConn, vms) => {
   );
 
 };
-  
+
+// Calls vagrant resume on provided vms, streaming output to wsConn
+// provision controls whether provisioning scripts are run
 const vagrantResume = async (wsConn, vms, provision = false) => {
 
   playbookVars = argonautCluster.getVagrantFiles();
@@ -180,12 +204,14 @@ const vagrantResume = async (wsConn, vms, provision = false) => {
 
   varsPath = utility.tmpWrite(yaml.dump(playbookVars));
 
+  // Stream ansible output from process
   ansible.runPlaybookWebsocket(
     wsConn,
     "vagrant-resume",
     varsPath
   );
 
+  // stream vagrant output from inner ssh process
   streamVagrantProcessPipe(
     wsConn,
     playbookVars,
@@ -193,7 +219,10 @@ const vagrantResume = async (wsConn, vms, provision = false) => {
   );
 
 };
-  
+
+// Calls vagrant reload on provided vms, streaming output to wsConn
+// provision controls whether provisioning scripts are run
+// force controls whether the VMs are shut down forcefully or gracefully
 const vagrantReload = async (wsConn, vms, provision = false, force = false) => {
 
   playbookVars = argonautCluster.getVagrantFiles();
@@ -211,19 +240,21 @@ const vagrantReload = async (wsConn, vms, provision = false, force = false) => {
   }
 
   if(force) {
-    playbookVars.forceArg = "--provision"
+    playbookVars.forceArg = "--force"
   } else {
-    playbookVars.forceArg = "--no-provision"
+    playbookVars.forceArg = ""
   }
 
   varsPath = utility.tmpWrite(yaml.dump(playbookVars));
 
+  // Stream ansible output from process
   ansible.runPlaybookWebsocket(
     wsConn,
     "vagrant-reload",
     varsPath
   );
 
+  // stream vagrant output from inner ssh process
   streamVagrantProcessPipe(
     wsConn,
     playbookVars,
@@ -231,7 +262,8 @@ const vagrantReload = async (wsConn, vms, provision = false, force = false) => {
   );
 
 };
-  
+
+// Unused -- calls vagrant validate to check Vagrantfile output
 // const vagrantValidate = async () => {
 
 //   playbookVars = argonautCluster.getVagrantFiles();
@@ -248,6 +280,7 @@ const vagrantReload = async (wsConn, vms, provision = false, force = false) => {
 
 // };
 
+// Calls vagrant status on provided vms, streaming output to wsConn
 const vagrantStatus = async (wsConn) => {
 
   playbookVars = argonautCluster.getVagrantFiles();
@@ -255,6 +288,7 @@ const vagrantStatus = async (wsConn) => {
 
   varsPath = utility.tmpWrite(yaml.dump(playbookVars));
 
+  // Stream ansible output from process
   ansible.runPlaybookWebsocket(
     wsConn,
     "vagrant-status",
@@ -263,6 +297,8 @@ const vagrantStatus = async (wsConn) => {
 
 };
 
+// Calls vagrant snapshot save on provided vms, streaming output to wsConn
+// the snapshot is saved to snapshotName
 const vagrantSnapshotSave = async (
   wsConn,
   vms,
@@ -280,12 +316,14 @@ const vagrantSnapshotSave = async (
 
   varsPath = utility.tmpWrite(yaml.dump(playbookVars));
 
+  // Stream ansible output from process
   ansible.runPlaybookWebsocket(
     wsConn,
     "vagrant-snapshot-save",
     varsPath
   );
 
+  // stream vagrant output from inner ssh process
   streamVagrantProcessPipe(
     wsConn,
     playbookVars,
@@ -293,7 +331,9 @@ const vagrantSnapshotSave = async (
   );
 
 };
-  
+
+// Calls vagrant snapshot delete on provided vms, streaming output to wsConn
+// the deleted snapshot is specified as snapshotName
 const vagrantSnapshotDelete = async (
   wsConn,
   vms,
@@ -311,12 +351,14 @@ const vagrantSnapshotDelete = async (
 
   varsPath = utility.tmpWrite(yaml.dump(playbookVars));
 
+  // Stream ansible output from process
   ansible.runPlaybookWebsocket(
     wsConn,
     "vagrant-snapshot-delete",
     varsPath
   );
 
+  // stream vagrant output from inner ssh process
   streamVagrantProcessPipe(
     wsConn,
     playbookVars,
@@ -324,7 +366,10 @@ const vagrantSnapshotDelete = async (
   );
 
 };
-  
+
+// Calls vagrant snapshot restore on provided vms, streaming output to wsConn
+// the restored snapshot is specified as snapshotName
+// provision controls whether the provisioning scripts are run
 const vagrantSnapshotRestore = async (
   wsConn,
   vms,
@@ -350,12 +395,14 @@ const vagrantSnapshotRestore = async (
 
   varsPath = utility.tmpWrite(yaml.dump(playbookVars));
 
+  // Stream ansible output from process
   ansible.runPlaybookWebsocket(
     wsConn,
     "vagrant-snapshot-restore",
     varsPath
   );
 
+  // stream vagrant output from inner ssh process
   streamVagrantProcessPipe(
     wsConn,
     playbookVars,
@@ -365,32 +412,34 @@ const vagrantSnapshotRestore = async (
 };
 
 // Unused -- was once meant to compare staged vs. actual configs
-const getActualVagrantFiles = (
-  acConfig = argonautCluster.readArgonautClusterConfig()
-) => {
+// const getActualVagrantFiles = (
+//   acConfig = argonautCluster.readArgonautClusterConfig()
+// ) => {
 
-  const nodes = Object.keys(acConfig.cluster.nodes);
-  const out = {};
+//   const nodes = Object.keys(acConfig.cluster.nodes);
+//   const out = {};
 
-  for(node of nodes) {
-    let vfTmp = tmp.fileSync({});
-    try {
-      utility.execSync(
-        'scp',
-        [
-          `${acConfig.cluster.inventory_vars.ansible_user}@${node}:${acConfig.cluster.vagrant_dir}/Vagrantfile`,
-          `${vfTmp.name}`
-        ]
-      );
-      out[node] = fs.readFileSync(vfTmp.name, 'utf-8');
-    } catch (error) {
+//   for(node of nodes) {
+//     let vfTmp = tmp.fileSync({});
+//     try {
+//       utility.execSync(
+//         'scp',
+//         [
+//           `${acConfig.cluster.inventory_vars.ansible_user}@${node}:${acConfig.cluster.vagrant_dir}/Vagrantfile`,
+//           `${vfTmp.name}`
+//         ]
+//       );
+//       out[node] = fs.readFileSync(vfTmp.name, 'utf-8');
+//     } catch (error) {
 
-    }
-  }
+//     }
+//   }
 
-  return out;
-};
+//   return out;
+// };
 
+// Lists vagrant snapshots by calling an SSH process
+// returns an output object of rows to be passed to the Vue app
 const vagrantSnapshotList = (
   acConfig = argonautCluster.readArgonautClusterConfig()
 ) => {
@@ -433,6 +482,9 @@ const vagrantSnapshotList = (
   
 };
 
+// Runs the kill vagrant processes playbook on provided nodes, which runs pkill vagrant; pkill ruby
+// Useful for clearing out existing Vagrant processes to let new ones run
+// Streams output to wsConn
 const killVagrantProcesses = (
   wsConn,
   nodes
@@ -461,6 +513,6 @@ module.exports = {
   vagrantSnapshotDelete,
   vagrantSnapshotRestore,
   vagrantSnapshotList,
-  getActualVagrantFiles,
+  // getActualVagrantFiles,
   killVagrantProcesses
 };

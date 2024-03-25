@@ -27,6 +27,8 @@ cluster:
     # Each key must be the actual hostname of the Vagrant host.
     # They must be unique across the cluster.
     vagrant-host-0:
+      # Required. Each node must be in at least one group, otherwise
+      # ansible inventory won't render.
       # Sets what inventory groups the Vagrant host belongs to.
       # Useful for running custom playbooks on a subset of groups.
       inventory_groups:
@@ -150,6 +152,8 @@ vm_types:
 
     # Set provisioning steps (i.e., after initializing the VM)
     # Currently, only shell scripts are tested.
+    # Required, otherwise vagrantfiles won't render. Can supply [] to 
+    # shell_scripts if no provisioning needed (see simple_private example).
     # See https://developer.hashicorp.com/vagrant/docs/provisioning/shell
     provisioning:
       shell_scripts:

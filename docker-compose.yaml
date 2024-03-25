@@ -19,7 +19,7 @@ services:
       - AC_PASSWORD=changeit # the password to log into the UI
       - ANSIBLE_BECOME_PASS=mybecomepass # the password needed to perform sudo on Vagrant hosts. Use only if needed for a custom playbook.
       - SSH_AUTH_SOCK=/ssh-agent # Used for SSH agent forwarding
-      - ANSIBLE_STDOUT_CALLBACK=yaml # Causes Ansible to display YAML output, do not change
+      - ANSIBLE_STDOUT_CALLBACK=yaml # Do not change! Causes Ansible to display YAML output in logs. Required for playbook log parsing
     # command: /bin/sh -c "while sleep 1000; do :; done" # override to disable API server (e.g., for development)
   app:
     build:
