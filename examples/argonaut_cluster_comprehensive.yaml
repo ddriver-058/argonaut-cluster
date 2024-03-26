@@ -35,10 +35,11 @@ cluster:
         - server
         - worker
 
+      # Required to provide at least inventory_vars: {}
       # Set ansible inventory vars to be made available in playbooks.
       # At the node level, these apply to individual Vagrant hosts.
       inventory_vars:
-        ansible_host: 192.168.1.1
+        ansible_host: 192.168.1.1 # ansible_host controls how Ansible attempts to SSH into the node, e.g., it uses ansible_user@ansible_host
 
       # Specify the VMs to run on the Vagrant host.
       vms:

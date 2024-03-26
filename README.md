@@ -10,10 +10,10 @@ Argonaut Cluster enables you to control VMs declaratively and effortlessly acros
 
 Argonaut Cluster aims to provide a simple but flexible solution for those looking to control VMs across a home lab or server farm.
 
- - Scale your virtualized Kubernetes cluster to multiple physical nodes.
- - Deploy development boxes for a group of users from a central configuration.
- - Recreate complex networks without worrying about per-node limitations.
- - Test isolated CI/CD environments with more flexibility.
+ - Use VMs as the basis for your on-prem Kubernetes cluster and easily scale to multiple physical nodes.
+ - Deploy VMs as development boxes for a group of users from a central configuration.
+ - Recreate complex networks without worrying about single-node resource limitations.
+ - Set up isolated CI/CD environments to test software delivery pipelines.
 
 ## Disclaimers
 
@@ -38,6 +38,7 @@ To get started with Argonaut Cluster:
     ssh-copy-id username@remote_server # Repeat for each remote_server
     ssh username@remote_server # Repeat for each, accepting the host keys to update known_hosts
 
+Note that the same procedure will apply if you want to use a single-node setup, i.e., using a node as both an Argonaut Cluster controller and a Vagrant server. You will treat your single node as the 'remote_server'. In this case, you will want to run `docker network inspect [my-ac-network]` to find the subnet to allow via UFW.
 
 ## Quickstart
 Clone this repository and ensure that your known_hosts file is located in ~/.ssh/known_hosts. If not, update the docker-compose.yaml with your actual known_hosts file location.
@@ -51,8 +52,11 @@ Finally, go to
 
     https://[your-argonaut-cluster-host-name]:7443
 accept the self-signed cert and log in.
+
+You will then need to supply an argonaut_cluster.yaml and create the vagrant_dir on each Vagrant server.
+
 ## Editing argonaut_cluster.yaml
-Argonaut Cluster provides a built-in editor (thanks to vue-codemirror) accessible by clicking the pencil in the bottom toolbar of the UI. Reference the comprehensive example and populate the file with values relevant to your use case. 
+Argonaut Cluster provides a built-in editor (thanks to [vue-codemirror](https://github.com/surmon-china/vue-codemirror)) accessible by clicking the pencil in the bottom toolbar of the UI. Reference the comprehensive example and populate the file with values relevant to your use case. 
 
 You can render the templated Vagrantfiles and Ansible Inventory using the right-hand dropdown.  When you are satisfied, click save.
 
@@ -62,7 +66,7 @@ If your configuration works to your liking and you want to keep it, you **must**
 ## Editing docker_compose.yaml
 You can view the docker_compose.yaml to learn about the environment variables that can be passed to the api: service.
 
-You are also able to add new services if you want your VMs to make use of them. For instance, here is a simple TFTP service due to [pghalliday](https://github.com/pghalliday-docker/tftp).
+You are also able to add new services if you want your VMs to make use of them. For instance, here is [a simple TFTP service](https://github.com/pghalliday-docker/tftp).
 
     api: {}
       # your api service definition here
@@ -84,7 +88,7 @@ Then, your Argonaut Cluster container and the VMs can access the TFTP server via
 To add custom playbooks, create a new folder in api/playbooks, then save a playbook.yaml to it. E.g.,
 
     api/playbooks/my-playbook/playbook.yaml
-Restart Argonaut Cluster and you should find your new playbook. Note that, currently, no variables are passed to the playbook, so you may need to define variables in the playbook or make use of inventory groups to achieve your goal.
+Rebuild Argonaut Cluster and you should find your new playbook. Note that, currently, no variables are passed to the playbook, so you may need to define variables in the playbook or make use of inventory groups to achieve your goal.
 
 ## How it works
 Argonaut Cluster runs an API server implemented in node.js with Koa. It runs Ansible playbooks within the API container and streams the output in real time to the Vue 3 app via WebSocket connections. The API server passes in variables for the pre-bundled playbooks via temporary files.
