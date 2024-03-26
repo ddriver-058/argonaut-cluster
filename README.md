@@ -3,6 +3,8 @@ Argonaut Cluster enables you to control VMs declaratively and effortlessly acros
 
 **NOTE: This is a beta release of a personal project. It is only recommended for development and test cases.**
 
+Demo: https://player.vimeo.com/video/927577130
+
  - Simple configuration through a single **argonaut_cluster.yaml** that abstracts the setup of Vagrant and Ansible to manage VMs on multiple physical nodes.
  - Streamlined cluster management through a Vue 3 web interface. Sync your configuration, edit & preview, and snapshot your cluster with the click of a button.
  - Easily add new services for your VMs and Argonaut Cluster controller to access via Docker Compose.
